@@ -89,13 +89,9 @@ fn android_log(prio: log_ffi::LogPriority, tag: &CStr, msg: &CStr) {
 fn android_log(_priority: Level, _tag: &CStr, _msg: &CStr) {}
 
 /// Underlying android logger backend
-pub struct AndroidLogger {
-    config: RwLock<Config>,
-}
+pub struct AndroidLogger;
 
-lazy_static! {
-   static ref ANDROID_LOGGER: AndroidLogger = AndroidLogger::default();
-}
+static ANDROID_LOGGER: AndroidLogger = AndroidLogger;
 
 const LOGGING_TAG_MAX_LEN: usize = 23;
 const LOGGING_MSG_MAX_LEN: usize = 4000;
@@ -103,9 +99,7 @@ const LOGGING_MSG_MAX_LEN: usize = 4000;
 impl Default for AndroidLogger {
     /// Create a new logger with default config
     fn default() -> AndroidLogger {
-        AndroidLogger {
-            config: RwLock::new(Config::default()),
-        }
+        AndroidLogger
     }
 }
 
@@ -115,9 +109,7 @@ impl Log for AndroidLogger {
     }
 
     fn log(&self, record: &Record) {
-        let config = self.config
-            .read()
-            .expect("failed to acquire android_log filter lock for read");
+        let config = Config::default();
 
         if !config.filter_matches(record) {
             return;
@@ -186,11 +178,11 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Config {
+        (Config {
             log_level: None,
             filter: None,
             tag: None,
-        }
+        }).with_min_level(Level::Trace).with_tag("sample_mod")
     }
 }
 
@@ -385,15 +377,7 @@ pub fn log(record: &Record) {
 /// It is ok to call this at the activity creation, and it will be
 /// repeatedly called on every lifecycle restart (i.e. screen rotation).
 pub fn init_once(config: Config) {
-    if let Err(err) = log::set_logger(&*ANDROID_LOGGER) {
+    if let Err(err) = log::set_logger(&ANDROID_LOGGER) {
         debug!("android_logger: log::set_logger failed: {}", err);
-    } else {
-        if let Some(level) = config.log_level {
-            log::set_max_level(level.to_level_filter());
-        }
-        *ANDROID_LOGGER
-            .config
-            .write()
-            .expect("failed to acquire android_log filter lock for write") = config;
     }
 }
